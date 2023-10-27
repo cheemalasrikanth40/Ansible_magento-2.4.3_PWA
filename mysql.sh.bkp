@@ -1,0 +1,30 @@
+#!/bin/bash
+
+DB_NAME="magento"
+DB_USER="magento"
+DB_PASS="magento"
+
+# Start MySQL service
+service mysql start
+
+# Check if database exists
+if mysql -u root -p -e "USE ${DB_NAME}"; then
+  # If database exists, drop it
+  mysql -u root -p -e "DROP DATABASE ${DB_NAME};"
+fi
+
+# Check if user exists
+if mysql -u root -p -e "SELECT User FROM mysql.user WHERE User='${DB_USER}'" | grep -q ${DB_USER}; then
+  # If user exists, drop it
+  mysql -u root -p -e "DROP USER '${DB_USER}'@'localhost';"
+fi
+
+# Create database
+mysql -u root -p -e "CREATE DATABASE ${DB_NAME};"
+
+# Create user
+mysql -u root -p -e "CREATE USER '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+
+# Grant permissions
+mysql -u root -p -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
+
