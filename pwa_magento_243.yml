@@ -1,0 +1,274 @@
+---
+- hosts: 172.17.0.3
+  user: root
+  tasks:
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Add PHP PPA
+      apt_repository:
+        repo: ppa:ondrej/php
+      when:
+        - ansible_distribution == 'Ubuntu'
+        - ansible_distribution_version.split('.')[0] | int >= 20
+        - ansible_distribution_version.split('.')[1] | int >= 4
+
+    - name: Install PHP and extensions
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - software-properties-common
+        - php7.4
+        - php7.4-fpm
+        - php7.4-mysql
+        - php7.4-json
+        - php7.4-cli
+        - php7.4-opcache
+        - php7.4-xml
+        - php7.4-mbstring
+        - php7.4-gd
+        - php7.4-curl
+        - php7.4-intl
+        - php7.4-zip
+        - php7.4-bcmath
+        - php7.4-soap
+        - php7.4-common
+        - php7.4-xmlrpc
+        - php7.4-dev
+        - php7.4-imap
+
+    - name: Remove apache2
+      apt:
+        name:
+          - apache2
+          - apache2-utils
+          - apache2-data
+        state: absent
+
+    - name: Remove Apache2 files
+      shell: rm -rf /usr/sbin/apache2 /usr/lib/apache2 /etc/apache2 /usr/share/apache2
+
+    - name: Install PyMySQL
+      apt:
+        name: python3-pymysql
+        state: present
+
+    - name: Copy php.ini
+      copy:
+        src: /2.4.3/php.ini
+        dest: /etc/php/7.4/cli/php.ini
+
+    - name: Install MySQL 8.0
+      apt:
+        name: mysql-server
+        state: present
+
+    - name: start Mysql
+      service:
+        name: mysql
+        state: started
+
+    - name: copy the mysql_script
+      copy:
+        src: /2.4.3/mysql.sh
+        dest: /mysql.sh
+        mode: '0755'
+
+    - name: Run the mysql_script
+      shell: /mysql.sh
+
+    - name: Install Java
+      apt:
+        name: openjdk-11-jdk
+        state: present
+
+    - name: Install curl, wget and gnupg
+      apt:
+        name:
+          - curl
+          - wget
+          - gnupg
+          - zip
+          - unzip
+        state: present
+
+    - name: Add Elastic GPG key
+      apt_key:
+        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+        state: present
+
+    - name: Add Elastic APT repository
+      apt_repository:
+        repo: deb https://artifacts.elastic.co/packages/7.x/apt stable main
+        state: present
+        filename: elastic-7.x
+
+    - name: Install Elasticsearch
+      apt:
+        name: elasticsearch
+        state: present
+
+    - name: copy elasticsearch.yml
+      copy:
+        src: /2.4.3/elasticsearch.yml
+        dest: /etc/elasticsearch/elasticsearch.yml
+
+    - name: Install Composer
+      shell: "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
+
+    - name: Update Composer
+      shell: "composer self-update 1.10.22"
+
+    - name: Copy auth.json
+      copy:
+        src: /2.4.3/auth.json
+        dest: /root/.composer/auth.json
+
+    - name: Get the Metapackage
+      shell: "cd /var/www/html && composer create-project --no-interaction --repository-url=https://repo.magento.com/ magento/project-community-edition=2.4.3 /var/www/html/magento"
+
+    - name: Set permissions for Magento
+      shell: "cd /var/www/html/magento && find var generated vendor pub/static pub/media app/etc -type f -exec chmod g+w {} + && find var generated vendor pub/static pub/media app/etc -type d -exec chmod g+ws {} + && chown -R :www-data . && chmod u+x bin/magento && chmod -R 777 var generated"
+
+    - name: copy default file
+      copy:
+        src: /2.4.3/default
+        dest: /etc/nginx/sites-available
+
+    - name: Start nginx
+      service:
+        name: nginx
+        state: started
+
+    - name: Start elasticsearch
+      service:
+        name: elasticsearch
+        state: started
+
+    - name: Install Magento
+      shell: |
+        cd /var/www/html/magento && \
+        php bin/magento setup:install \
+        --base-url=http://kanthu9917.com \
+        --db-host=127.0.0.1 \
+        --db-name=Kanthu \
+        --db-user=Kanthu \
+        --db-password=123456789 \
+        --admin-firstname=admin \
+        --admin-lastname=admin \
+        --admin-email=admin@admin.com \
+        --admin-user=admin \
+        --admin-password=admin123 \
+        --language=en_US \
+        --currency=USD \
+        --timezone=America/Chicago \
+        --use-rewrites=1 \
+        --search-engine=elasticsearch7 \
+        --elasticsearch-host=localhost \
+        --elasticsearch-port=9200
+
+    - name: Upgrade Magento
+      shell: "cd /var/www/html/magento && php bin/magento setup:upgrade"
+
+    - name: Compile Magento DI
+      shell: "cd /var/www/html/magento && php bin/magento setup:di:compile"
+
+    - name: Deploy Magento static content
+      shell: "cd /var/www/html/magento && php bin/magento setup:static-content:deploy -f"
+
+    - name: Clear Magento cache
+      shell: "cd /var/www/html/magento && php bin/magento cache:clean && php bin/magento cache:flush"
+
+    - name: Restart nginx service
+      service:
+        name: nginx
+        state: restarted
+    - name: Restart php7.4-fpm service
+      service:
+        name: php7.4-fpm
+        state: restarted
+    - name: Restart mysql service
+      service:
+        name: mysql
+        state: restarted
+    - name: Restart elasticsearch service
+      service:
+        name: elasticsearch
+        state: restarted
+
+    - name: Update and install additional packages
+      apt:
+        name:
+          - npm
+          - git
+          - sudo
+          - openssl
+        state: present
+
+    - name: Install Yarn globally
+      command: npm install --global yarn
+
+    - name: Clone PWA Studio repository
+      git:
+        repo: https://github.com/magento-research/pwa-studio.git
+        dest: /var/www/html/magento/pwa-studio
+
+    - name: Execute yarn install in PWA Studio
+      command: yarn install --ignore-engines
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+
+    - name: Copy .env file to venia-concept directory
+      copy:
+        src: /2.4.3/.env
+        dest: /var/www/html/magento/pwa-studio/packages/venia-concept/.env
+
+    - name: Upgrade musl
+      command: apt-get upgrade musl -y
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+
+    - name: Switch to sudo shell
+      command: echo | sudo -S -s
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+      become: true
+
+    - name: Install Node.js version 14.8.0
+      command: npm install -g n 
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+
+    - name: Use n to install Node.js version 14.8.0
+      command: n 14.8.0
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+
+    - name: Check Node.js version
+      command: node --version
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+
+    - name: Create custom origin buildpack
+      command: yarn buildpack create-custom-origin packages/venia-concept
+      args:
+        chdir: /var/www/html/magento/pwa-studio
+
+    - name: Build Venia Concept
+      command: yarn build
+      args:
+        chdir: /var/www/html/magento/pwa-studio/packages/venia-concept
+
+    - name: Watch Venia Concept
+      command: yarn watch
+      args:
+        chdir: /var/www/html/magento/pwa-studio/packages/venia-concept
+
+#    - name: Run Yarn Watch in the background
+#      command: nohup yarn watch &
+#      args:
+#        chdir: /var/www/html/magento/pwa-studio/packages/venia-concept
+
