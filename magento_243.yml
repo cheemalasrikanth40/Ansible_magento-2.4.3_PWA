@@ -182,9 +182,19 @@
     - name: Clear Magento cache
       shell: "cd /var/www/html/magento && php bin/magento cache:clean && php bin/magento cache:flush"
 
-    - name: Copy start.sh
-      copy:
-        src: /2.4.3/start.sh
-        dest: /start.sh
-        mode: '0755'
-
+    - name: Restart nginx service
+      service:
+        name: nginx
+        state: restarted
+    - name: Restart php7.4-fpm service
+      service:
+        name: php7.4-fpm
+        state: restarted
+    - name: Restart mysql service
+      service:
+        name: mysql
+        state: restarted
+    - name: Restart elasticsearch service
+      service:
+        name: elasticsearch
+        state: restarted
